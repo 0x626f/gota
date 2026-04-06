@@ -387,6 +387,164 @@ func TestUnmarshal_NestedStruct(t *testing.T) {
 	}
 }
 
+func TestUnmarshal_DefaultString(t *testing.T) {
+	type config struct {
+		Host string `env:"HOST_MISSING_XYZ" default:"localhost"`
+	}
+
+	var cfg config
+	if err := Unmarshal(&cfg); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if cfg.Host != "localhost" {
+		t.Errorf("Host: got %q, want %q", cfg.Host, "localhost")
+	}
+}
+
+func TestUnmarshal_DefaultInt(t *testing.T) {
+	type config struct {
+		Port int `env:"PORT_MISSING_XYZ" default:"8080"`
+	}
+
+	var cfg config
+	if err := Unmarshal(&cfg); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if cfg.Port != 8080 {
+		t.Errorf("Port: got %d, want 8080", cfg.Port)
+	}
+}
+
+func TestUnmarshal_DefaultBool(t *testing.T) {
+	type config struct {
+		Debug bool `env:"DEBUG_MISSING_XYZ" default:"true"`
+	}
+
+	var cfg config
+	if err := Unmarshal(&cfg); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !cfg.Debug {
+		t.Errorf("Debug: got false, want true")
+	}
+}
+
+func TestUnmarshal_DefaultFloat(t *testing.T) {
+	type config struct {
+		Ratio float64 `env:"RATIO_MISSING_XYZ" default:"3.14"`
+	}
+
+	var cfg config
+	if err := Unmarshal(&cfg); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if cfg.Ratio != 3.14 {
+		t.Errorf("Ratio: got %f, want 3.14", cfg.Ratio)
+	}
+}
+
+func TestUnmarshal_DefaultDuration(t *testing.T) {
+	type config struct {
+		Timeout time.Duration `env:"TIMEOUT_MISSING_XYZ" default:"30s"`
+	}
+
+	var cfg config
+	if err := Unmarshal(&cfg); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if cfg.Timeout != 30*time.Second {
+		t.Errorf("Timeout: got %v, want 30s", cfg.Timeout)
+	}
+}
+
+func TestUnmarshal_DefaultSlice(t *testing.T) {
+	type config struct {
+		Tags []string `env:"TAGS_MISSING_XYZ" default:"a,b,c"`
+	}
+
+	var cfg config
+	if err := Unmarshal(&cfg); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	want := []string{"a", "b", "c"}
+	if len(cfg.Tags) != len(want) {
+		t.Fatalf("Tags len: got %d, want %d", len(cfg.Tags), len(want))
+	}
+	for i, v := range want {
+		if cfg.Tags[i] != v {
+			t.Errorf("Tags[%d]: got %q, want %q", i, cfg.Tags[i], v)
+		}
+	}
+}
+
+func TestUnmarshal_DefaultTextUnmarshaler(t *testing.T) {
+	type config struct {
+		Custom textUnmarshaler `env:"CUSTOM_MISSING_XYZ" default:"world"`
+	}
+
+	var cfg config
+	if err := Unmarshal(&cfg); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if cfg.Custom.Value != "unmarshaled:world" {
+		t.Errorf("Custom: got %q, want %q", cfg.Custom.Value, "unmarshaled:world")
+	}
+}
+
+func TestUnmarshal_EnvOverridesDefault(t *testing.T) {
+	type config struct {
+		Host string `env:"HOST_WITH_DEFAULT" default:"localhost"`
+	}
+
+	t.Setenv("HOST_WITH_DEFAULT", "remotehost")
+
+	var cfg config
+	if err := Unmarshal(&cfg); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if cfg.Host != "remotehost" {
+		t.Errorf("Host: got %q, want %q", cfg.Host, "remotehost")
+	}
+}
+
+func TestUnmarshal_InvalidDefaultReturnsError(t *testing.T) {
+	type config struct {
+		Port int `env:"PORT_MISSING_XYZ" default:"notanint"`
+	}
+
+	var cfg config
+	if err := Unmarshal(&cfg); err == nil {
+		t.Fatal("expected error for invalid default value, got nil")
+	}
+}
+
+func TestUnmarshal_NoDefaultLeavesZeroValue(t *testing.T) {
+	type config struct {
+		Host string `env:"HOST_MISSING_XYZ"`
+		Port int    `env:"PORT_MISSING_XYZ"`
+	}
+
+	var cfg config
+	if err := Unmarshal(&cfg); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if cfg.Host != "" {
+		t.Errorf("Host should be empty without default, got %q", cfg.Host)
+	}
+	if cfg.Port != 0 {
+		t.Errorf("Port should be 0 without default, got %d", cfg.Port)
+	}
+}
+
 func TestUnmarshal_NestedPointerToStruct(t *testing.T) {
 	type db struct {
 		Host string `env:"DB_HOST"`

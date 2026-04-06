@@ -26,7 +26,9 @@ import (
 )
 
 const (
-	internalTag = "env"
+	internalTag             = "env"
+	internalTagDefaultValue = "default"
+	internalTagExclude      = "-"
 )
 
 func Unmarshal(v any) error {
@@ -173,7 +175,7 @@ func deserializeStruct(ref reflect.Value) (err error) {
 
 		tag := field.Tag.Get(internalTag)
 
-		if tag == "-" {
+		if tag == internalTagExclude {
 			continue
 		}
 
@@ -194,6 +196,11 @@ func deserializeStruct(ref reflect.Value) (err error) {
 
 			if exists {
 				err = errors.Join(err, deserializeValue(fieldRef, value))
+			} else {
+				defaultValue := field.Tag.Get(internalTagDefaultValue)
+				if defaultValue != "" {
+					err = errors.Join(err, deserializeValue(fieldRef, defaultValue))
+				}
 			}
 
 		}
