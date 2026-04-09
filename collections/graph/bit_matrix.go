@@ -48,6 +48,7 @@ func (matrix *BitMatrix[Key]) Add(vertex Key) {
 	matrix.keys[index] = vertex
 	matrix.linkage = growTo(matrix.linkage, index)
 	matrix.linkage[index] = make(bitRow, 0)
+	matrix.vertexCount++
 	if matrix.uf != nil {
 		matrix.uf.addVertex(vertex)
 	}
@@ -63,9 +64,18 @@ func (matrix *BitMatrix[Key]) Delete(vertex Key) bool {
 		return false
 	}
 	index := matrix.indexes[vertex]
+	// Count outgoing edges (== logical edges for undirected).
+	if index < len(matrix.linkage) && matrix.linkage[index] != nil {
+		for _, b := range matrix.linkage[index] {
+			matrix.edgeCount -= bits.OnesCount8(b)
+		}
+	}
 	matrix.linkage[index] = nil
 	for i, row := range matrix.linkage {
 		if row != nil {
+			if matrix.features.HasFeature(Directed) && matrix.getBit(i, index) {
+				matrix.edgeCount-- // incoming directed edge
+			}
 			matrix.clearBit(i, index)
 		}
 	}
@@ -73,6 +83,7 @@ func (matrix *BitMatrix[Key]) Delete(vertex Key) bool {
 	var zeroKey Key
 	matrix.keys[index] = zeroKey
 	matrix.indexer.Release(index)
+	matrix.vertexCount--
 	if matrix.uf != nil {
 		matrix.uf.removeVertex(vertex)
 	}
@@ -103,6 +114,9 @@ func (matrix *BitMatrix[Key]) Set(vertex0, vertex1 Key) bool {
 	matrix.Add(vertex1)
 	index0 := matrix.indexes[vertex0]
 	index1 := matrix.indexes[vertex1]
+	if !matrix.getBit(index0, index1) {
+		matrix.edgeCount++
+	}
 	matrix.setBit(index0, index1)
 	if !matrix.features.HasFeature(Directed) {
 		matrix.setBit(index1, index0)
@@ -155,6 +169,7 @@ func (matrix *BitMatrix[Key]) Remove(path ...Key) bool {
 		}
 	}
 
+	matrix.edgeCount -= len(path) - 1
 	for i := 0; i+1 < len(path); i++ {
 		matrix.remove(path[i], path[i+1])
 	}

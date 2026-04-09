@@ -63,6 +63,8 @@ type ITopology[Key comparable] interface {
 	IsCycled() bool
 	// Neighbors returns the direct successors of v.
 	Neighbors(Key) []Key
+	// Density returns the ratio of present edges to the maximum possible edges.
+	Density() float64
 }
 
 // TopologyParams configures a topology at construction time.
@@ -74,6 +76,25 @@ type TopologyParams struct {
 
 // baseTopology holds shared state embedded by all topology implementations.
 type baseTopology[Key comparable] struct {
-	features FeatureStorage
-	uf       *unionFind[Key] // non-nil only when Acyclic + undirected is first used
+	features    FeatureStorage
+	uf          *unionFind[Key] // non-nil only when Acyclic + undirected is first used
+	vertexCount int
+	edgeCount   int
+}
+
+// Density returns the ratio of actual edges to the maximum possible edges.
+// Directed:   E / (V·(V−1)).
+// Undirected: 2E / (V·(V−1)).
+// Returns 0 when fewer than 2 vertices are present.
+func (b *baseTopology[Key]) Density() float64 {
+	v := b.vertexCount
+	if v < 2 {
+		return 0
+	}
+	e := float64(b.edgeCount)
+	denom := float64(v) * float64(v-1)
+	if b.features.HasFeature(Directed) {
+		return e / denom
+	}
+	return 2 * e / denom
 }

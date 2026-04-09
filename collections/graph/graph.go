@@ -18,6 +18,8 @@ type IGraph[Vertex IVertex[Key], Edge any, Key comparable] interface {
 	Remove(path ...Vertex) bool
 	// IsCycled reports whether the graph contains a cycle.
 	IsCycled() bool
+	// Density returns the ratio of present edges to the maximum possible edges.
+	Density() float64
 	// Neighbors returns the keys of direct successors of v.
 	Neighbors(Vertex) []Key
 	// GetVertex retrieves the vertex stored under the given key.
@@ -121,6 +123,10 @@ func (graph *Graph[Vertex, Edge, Key]) Remove(path ...Vertex) bool {
 
 func (graph *Graph[Vertex, Edge, Key]) IsCycled() bool {
 	return graph.topology.IsCycled()
+}
+
+func (graph *Graph[Vertex, Edge, Key]) Density() float64 {
+	return graph.topology.Density()
 }
 
 func (graph *Graph[Vertex, Edge, Key]) Neighbors(v Vertex) []Key {

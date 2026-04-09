@@ -26,6 +26,7 @@ func NewAdjacencyMatrix[Key comparable](params ...TopologyParams) *AdjacencyMatr
 func (matrix *AdjacencyMatrix[Key]) Add(vertex Key) {
 	if _, exists := matrix.data[vertex]; !exists {
 		matrix.data[vertex] = make(map[Key]struct{})
+		matrix.vertexCount++
 		if matrix.uf != nil {
 			matrix.uf.addVertex(vertex)
 		}
@@ -39,10 +40,18 @@ func (matrix *AdjacencyMatrix[Key]) Contains(vertex Key) (result bool) {
 
 func (matrix *AdjacencyMatrix[Key]) Delete(vertex Key) (result bool) {
 	if matrix.Contains(vertex) {
+		// Outgoing edges (== all logical edges for undirected).
+		matrix.edgeCount -= len(matrix.data[vertex])
 		delete(matrix.data, vertex)
 		for _, edges := range matrix.data {
-			delete(edges, vertex)
+			if _, ok := edges[vertex]; ok {
+				if matrix.features.HasFeature(Directed) {
+					matrix.edgeCount-- // incoming directed edge
+				}
+				delete(edges, vertex)
+			}
 		}
+		matrix.vertexCount--
 		if matrix.uf != nil {
 			matrix.uf.removeVertex(vertex)
 		}
@@ -72,10 +81,13 @@ func (matrix *AdjacencyMatrix[Key]) Set(vertex0, vertex1 Key) bool {
 	}
 
 	matrix.Add(vertex0)
+	matrix.Add(vertex1)
+	if _, exists := matrix.data[vertex0][vertex1]; !exists {
+		matrix.edgeCount++
+	}
 	matrix.data[vertex0][vertex1] = struct{}{}
 
 	if !matrix.features.HasFeature(Directed) {
-		matrix.Add(vertex1)
 		matrix.data[vertex1][vertex0] = struct{}{}
 	}
 
@@ -150,6 +162,7 @@ func (matrix *AdjacencyMatrix[Key]) Remove(path ...Key) bool {
 		}
 	}
 
+	matrix.edgeCount -= len(path) - 1
 	for cursor, from := range path {
 		if cursor+1 == len(path) {
 			break

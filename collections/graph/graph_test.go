@@ -577,3 +577,182 @@ func TestGraph_AStar_ReachesGoal(t *testing.T) {
 		})
 	}
 }
+
+// ─── Density ─────────────────────────────────────────────────────────────────
+
+func TestGraph_Density_Empty(t *testing.T) {
+	for _, f := range graphFactories {
+		t.Run(f.name, func(t *testing.T) {
+			g := f.new()
+			if d := g.Density(); d != 0 {
+				t.Fatalf("empty graph: want 0, got %v", d)
+			}
+		})
+	}
+}
+
+func TestGraph_Density_SingleVertex(t *testing.T) {
+	for _, f := range graphFactories {
+		t.Run(f.name, func(t *testing.T) {
+			g := f.new()
+			g.Add("a")
+			if d := g.Density(); d != 0 {
+				t.Fatalf("single vertex: want 0, got %v", d)
+			}
+		})
+	}
+}
+
+func TestGraph_Density_Undirected_NoEdges(t *testing.T) {
+	for _, f := range graphFactories {
+		t.Run(f.name, func(t *testing.T) {
+			g := f.new()
+			g.Add("a")
+			g.Add("b")
+			g.Add("c")
+			if d := g.Density(); d != 0 {
+				t.Fatalf("3 vertices no edges: want 0, got %v", d)
+			}
+		})
+	}
+}
+
+func TestGraph_Density_Undirected_Complete(t *testing.T) {
+	// 3-vertex complete undirected graph: 3 edges, max = 3, density = 1.0
+	for _, f := range graphFactories {
+		t.Run(f.name, func(t *testing.T) {
+			g := f.new()
+			a, b, c := strVertex("a"), strVertex("b"), strVertex("c")
+			g.Set(a, b, 1)
+			g.Set(b, c, 1)
+			g.Set(a, c, 1)
+			want := 1.0
+			if d := g.Density(); d != want {
+				t.Fatalf("complete undirected 3-vertex: want %v, got %v", want, d)
+			}
+		})
+	}
+}
+
+func TestGraph_Density_Undirected_Partial(t *testing.T) {
+	// 4 vertices, 2 edges: density = 2*2 / (4*3) = 4/12 ≈ 0.333...
+	for _, f := range graphFactories {
+		t.Run(f.name, func(t *testing.T) {
+			g := f.new()
+			a, b, c, d := strVertex("a"), strVertex("b"), strVertex("c"), strVertex("d")
+			g.Set(a, b, 1)
+			g.Set(c, d, 1)
+			want := 4.0 / 12.0
+			if got := g.Density(); got != want {
+				t.Fatalf("4 vertices 2 edges: want %v, got %v", want, got)
+			}
+		})
+	}
+}
+
+func TestGraph_Density_Directed_Complete(t *testing.T) {
+	// Directed topology rejects back-edges, so the max for 3 vertices is 3 edges
+	// (a→b, b→c, a→c). density = 3 / (3*2) = 0.5.
+	for _, f := range directedGraphFactories {
+		t.Run(f.name, func(t *testing.T) {
+			g := f.new()
+			a, b, c := strVertex("a"), strVertex("b"), strVertex("c")
+			g.Set(a, b, 1)
+			g.Set(b, c, 1)
+			g.Set(a, c, 1)
+			want := 0.5
+			if d := g.Density(); d != want {
+				t.Fatalf("max directed 3-vertex: want %v, got %v", want, d)
+			}
+		})
+	}
+}
+
+func TestGraph_Density_Directed_Partial(t *testing.T) {
+	// 3 vertices, 2 directed edges (back-edge b→a rejected): density = 2 / (3*2) = 1/3.
+	for _, f := range directedGraphFactories {
+		t.Run(f.name, func(t *testing.T) {
+			g := f.new()
+			a, b, c := strVertex("a"), strVertex("b"), strVertex("c")
+			g.Add(c)
+			g.Set(a, b, 1)
+			g.Set(b, c, 1)
+			want := 2.0 / 6.0
+			if got := g.Density(); got != want {
+				t.Fatalf("3 vertices 2 directed edges: want %v, got %v", want, got)
+			}
+		})
+	}
+}
+
+func TestGraph_Density_IncreasesOnSet(t *testing.T) {
+	for _, f := range graphFactories {
+		t.Run(f.name, func(t *testing.T) {
+			g := f.new()
+			a, b, c := strVertex("a"), strVertex("b"), strVertex("c")
+			g.Add(a)
+			g.Add(b)
+			g.Add(c)
+			d0 := g.Density()
+			g.Set(a, b, 1)
+			d1 := g.Density()
+			g.Set(b, c, 1)
+			d2 := g.Density()
+			if !(d0 < d1 && d1 < d2) {
+				t.Fatalf("density must increase with each edge: %v %v %v", d0, d1, d2)
+			}
+		})
+	}
+}
+
+func TestGraph_Density_DecreasesOnRemoveEdge(t *testing.T) {
+	for _, f := range graphFactories {
+		t.Run(f.name, func(t *testing.T) {
+			g := f.new()
+			a, b, c := strVertex("a"), strVertex("b"), strVertex("c")
+			g.Set(a, b, 1)
+			g.Set(b, c, 1)
+			before := g.Density()
+			g.Remove(a, b)
+			after := g.Density()
+			if after >= before {
+				t.Fatalf("density must decrease after edge removal: before=%v after=%v", before, after)
+			}
+		})
+	}
+}
+
+func TestGraph_Density_DecreasesOnDeleteVertex(t *testing.T) {
+	// 3 vertices, 2 edges (a-b, b-c): density = 2*2/(3*2) = 2/3.
+	// Delete b (hub): 2 vertices, 0 edges remain, density = 0.
+	for _, f := range graphFactories {
+		t.Run(f.name, func(t *testing.T) {
+			g := f.new()
+			a, b, c := strVertex("a"), strVertex("b"), strVertex("c")
+			g.Set(a, b, 1)
+			g.Set(b, c, 1)
+			before := g.Density()
+			g.Delete(b)
+			after := g.Density()
+			if after >= before {
+				t.Fatalf("density must decrease after vertex deletion: before=%v after=%v", before, after)
+			}
+		})
+	}
+}
+
+func TestGraph_Density_IdempotentOnDuplicateSet(t *testing.T) {
+	for _, f := range graphFactories {
+		t.Run(f.name, func(t *testing.T) {
+			g := f.new()
+			a, b := strVertex("a"), strVertex("b")
+			g.Set(a, b, 1)
+			d1 := g.Density()
+			g.Set(a, b, 2) // re-set same edge
+			d2 := g.Density()
+			if d1 != d2 {
+				t.Fatalf("duplicate Set must not change density: %v -> %v", d1, d2)
+			}
+		})
+	}
+}

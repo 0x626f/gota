@@ -46,6 +46,7 @@ func (csr *CSR[Key]) Add(vertex Key) {
 	csr.keys[index] = vertex
 	csr.rows = growTo(csr.rows, index)
 	csr.rows[index] = nil
+	csr.vertexCount++
 	if csr.uf != nil {
 		csr.uf.addVertex(vertex)
 	}
@@ -61,10 +62,17 @@ func (csr *CSR[Key]) Delete(vertex Key) bool {
 		return false
 	}
 	index := csr.indexes[vertex]
+	// Count outgoing edges (== logical edges for undirected).
+	if index < len(csr.rows) {
+		csr.edgeCount -= len(csr.rows[index])
+	}
 	csr.rows[index] = nil
 
 	for i, row := range csr.rows {
 		if row != nil {
+			if csr.features.HasFeature(Directed) && searchSorted(row, index) {
+				csr.edgeCount-- // incoming directed edge
+			}
 			csr.rows[i] = removeSorted(row, index)
 		}
 	}
@@ -74,6 +82,7 @@ func (csr *CSR[Key]) Delete(vertex Key) bool {
 	csr.keys[index] = zeroKey
 
 	csr.indexer.Release(index)
+	csr.vertexCount--
 	if csr.uf != nil {
 		csr.uf.removeVertex(vertex)
 	}
@@ -104,6 +113,9 @@ func (csr *CSR[Key]) Set(vertex0, vertex1 Key) bool {
 	csr.Add(vertex1)
 	index0 := csr.indexes[vertex0]
 	index1 := csr.indexes[vertex1]
+	if !searchSorted(csr.rows[index0], index1) {
+		csr.edgeCount++
+	}
 	insertSorted(&csr.rows[index0], index1)
 
 	if !csr.features.HasFeature(Directed) {
@@ -159,6 +171,7 @@ func (csr *CSR[Key]) Remove(path ...Key) bool {
 		}
 	}
 
+	csr.edgeCount -= len(path) - 1
 	for i := 0; i+1 < len(path); i++ {
 		csr.remove(path[i], path[i+1])
 	}
