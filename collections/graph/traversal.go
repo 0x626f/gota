@@ -222,7 +222,7 @@ func AStar[Key comparable](topology ITopology[Key], start, goal Key, traversal I
 }
 
 // Path is an ordered sequence of vertex keys representing a graph path.
-type Path[Key comparable] = []Key
+type Path[Key any] = []Key
 
 // SearchMode selects the traversal strategy used by Paths.
 type SearchMode uint8

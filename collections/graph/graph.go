@@ -26,10 +26,15 @@ type IGraph[Vertex IVertex[Key], Edge any, Key comparable] interface {
 	GetVertex(Key) (IVertex[Key], bool)
 	// GetEdge retrieves the edge data between two vertices.
 	GetEdge(Vertex, Vertex) (Edge, bool)
+	// GetEdgeByKeys retrieves the edge data between two vertices by keys.
+	GetEdgeByKeys(Key, Key) (Edge, bool)
 	// Paths returns all simple paths from start; see the package-level Paths function.
 	Paths(Key, bool, SearchMode, ...Key) []Path[Key]
 	// Routes returns all simple paths from start to target; see the package-level Routes function.
 	Routes(start, target Key, mode SearchMode, exclude ...Key) []Path[Key]
+	// MapPath converts key paths (as returned by Paths or Routes) into vertex paths.
+	// Keys with no registered vertex are silently dropped from the path.
+	MapPath([]Path[Key]) []Path[Vertex]
 	// DFS runs a depth-first traversal from the given start key.
 	DFS(Key, ITopologyTraversal[Key])
 	// BFS runs a breadth-first traversal from the given start key.
@@ -92,6 +97,8 @@ func (graph *Graph[Vertex, Edge, Key]) Set(from, to Vertex, edge Edge) bool {
 	if !graph.topology.Set(from.Key(), to.Key()) {
 		return false
 	}
+	graph.vertices[from.Key()] = from
+	graph.vertices[to.Key()] = to
 	if graph.edges[from.Key()] == nil {
 		graph.edges[from.Key()] = make(map[Key]Edge)
 	}
@@ -141,8 +148,12 @@ func (graph *Graph[Vertex, Edge, Key]) GetVertex(key Key) (vertex IVertex[Key], 
 }
 
 func (graph *Graph[Vertex, Edge, Key]) GetEdge(from, to Vertex) (edge Edge, ok bool) {
-	if _, ok = graph.edges[from.Key()]; ok {
-		edge, ok = graph.edges[from.Key()][to.Key()]
+	return graph.GetEdgeByKeys(from.Key(), to.Key())
+}
+
+func (graph *Graph[Vertex, Edge, Key]) GetEdgeByKeys(from, to Key) (edge Edge, ok bool) {
+	if _, ok = graph.edges[from]; ok {
+		edge, ok = graph.edges[from][to]
 	}
 	return
 }
@@ -153,6 +164,20 @@ func (graph *Graph[Vertex, Edge, Key]) Paths(start Key, cycled bool, mode Search
 
 func (graph *Graph[Vertex, Edge, Key]) Routes(start, target Key, mode SearchMode, exclude ...Key) []Path[Key] {
 	return Routes(graph.topology, start, target, mode, exclude...)
+}
+
+func (graph *Graph[Vertex, Edge, Key]) MapPath(paths []Path[Key]) []Path[Vertex] {
+	result := make([][]Vertex, len(paths))
+	for i, path := range paths {
+		vpath := make([]Vertex, 0, len(path))
+		for _, key := range path {
+			if v, ok := graph.vertices[key]; ok {
+				vpath = append(vpath, v)
+			}
+		}
+		result[i] = vpath
+	}
+	return result
 }
 
 func (graph *Graph[Vertex, Edge, Key]) DFS(start Key, traversal ITopologyTraversal[Key]) {

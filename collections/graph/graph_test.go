@@ -535,6 +535,61 @@ func TestGraph_Routes_SameVertex(t *testing.T) {
 	}
 }
 
+// ─── MapPath ──────────────────────────────────────────────────────────────────
+
+func TestGraph_MapPath_Routes(t *testing.T) {
+	for _, f := range directedGraphFactories {
+		t.Run(f.name, func(t *testing.T) {
+			g := f.new()
+			a, b, c, d := strVertex("a"), strVertex("b"), strVertex("c"), strVertex("d")
+			g.Set(a, b, 0)
+			g.Set(a, c, 0)
+			g.Set(b, d, 0)
+			g.Set(c, d, 0)
+			for _, mode := range []SearchMode{DFSSearch, BFSSearch} {
+				keys := g.Routes("a", "d", mode)
+				got := g.MapPath(keys)
+				if len(got) != 2 {
+					t.Fatalf("mode=%d want 2 vertex paths, got %d: %v", mode, len(got), got)
+				}
+				contains := func(want []strVertex) bool {
+					for _, vpath := range got {
+						if slices.Equal(vpath, want) {
+							return true
+						}
+					}
+					return false
+				}
+				if !contains([]strVertex{a, b, d}) {
+					t.Errorf("mode=%d missing vertex path [a b d] in %v", mode, got)
+				}
+				if !contains([]strVertex{a, c, d}) {
+					t.Errorf("mode=%d missing vertex path [a c d] in %v", mode, got)
+				}
+			}
+		})
+	}
+}
+
+func TestGraph_MapPath_MissingKey_Dropped(t *testing.T) {
+	for _, f := range directedGraphFactories {
+		t.Run(f.name, func(t *testing.T) {
+			g := f.new()
+			a, b := strVertex("a"), strVertex("b")
+			g.Set(a, b, 0)
+			// inject a path that references a key not in the vertex store
+			paths := []Path[string]{{"a", "x", "b"}}
+			got := g.MapPath(paths)
+			if len(got) != 1 {
+				t.Fatalf("want 1 path, got %d", len(got))
+			}
+			if !slices.Equal(got[0], []strVertex{a, b}) {
+				t.Errorf("want [a b] with x dropped, got %v", got[0])
+			}
+		})
+	}
+}
+
 // ─── DFS / BFS traversal ──────────────────────────────────────────────────────
 
 func TestGraph_DFS_VisitsAllVertices(t *testing.T) {
