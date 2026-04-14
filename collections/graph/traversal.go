@@ -300,6 +300,109 @@ type pathState[Key comparable] struct {
 	inPath map[Key]struct{}
 }
 
+// Routes returns all simple paths from start to target. mode selects
+// DFSSearch or BFSSearch. exclude lists vertices to skip.
+// When start == target the trivial single-vertex path is returned.
+func Routes[Key comparable](topology ITopology[Key], start, target Key, mode SearchMode, exclude ...Key) []Path[Key] {
+	excluded := make(map[Key]struct{}, len(exclude))
+	for _, k := range exclude {
+		excluded[k] = struct{}{}
+	}
+	if _, ok := excluded[start]; ok {
+		return nil
+	}
+	if _, ok := excluded[target]; ok {
+		return nil
+	}
+	if start == target {
+		return []Path[Key]{{start}}
+	}
+	if mode == BFSSearch {
+		return routesBFS(topology, start, target, excluded)
+	}
+	return routesDFS(topology, start, target, excluded)
+}
+
+// routesDFS collects all simple paths from start to target using recursive
+// depth-first backtracking.
+func routesDFS[Key comparable](topology ITopology[Key], start, target Key, excluded map[Key]struct{}) []Path[Key] {
+	var result []Path[Key]
+	path := []Key{start}
+	inPath := make(map[Key]struct{})
+	inPath[start] = struct{}{}
+
+	var walk func(v Key)
+	walk = func(v Key) {
+		for _, next := range topology.Neighbors(v) {
+			if _, ok := excluded[next]; ok {
+				continue
+			}
+			if _, ok := inPath[next]; ok {
+				continue
+			}
+			if next == target {
+				p := make([]Key, len(path)+1)
+				copy(p, path)
+				p[len(p)-1] = next
+				result = append(result, p)
+				continue
+			}
+			path = append(path, next)
+			inPath[next] = struct{}{}
+			walk(next)
+			path = path[:len(path)-1]
+			delete(inPath, next)
+		}
+	}
+
+	walk(start)
+	return result
+}
+
+// routesBFS collects all simple paths from start to target using iterative
+// breadth-first expansion. Shorter paths appear first in the result.
+func routesBFS[Key comparable](topology ITopology[Key], start, target Key, excluded map[Key]struct{}) []Path[Key] {
+	var result []Path[Key]
+
+	initial := pathState[Key]{
+		path:   []Key{start},
+		inPath: map[Key]struct{}{start: {}},
+	}
+	queue := []pathState[Key]{initial}
+
+	for len(queue) > 0 {
+		state := queue[0]
+		queue = queue[1:]
+
+		v := state.path[len(state.path)-1]
+		for _, next := range topology.Neighbors(v) {
+			if _, ok := excluded[next]; ok {
+				continue
+			}
+			if _, ok := state.inPath[next]; ok {
+				continue
+			}
+			newPath := make([]Key, len(state.path)+1)
+			copy(newPath, state.path)
+			newPath[len(newPath)-1] = next
+
+			if next == target {
+				result = append(result, newPath)
+				continue
+			}
+
+			newInPath := make(map[Key]struct{}, len(state.inPath)+1)
+			for k := range state.inPath {
+				newInPath[k] = struct{}{}
+			}
+			newInPath[next] = struct{}{}
+			queue = append(queue, pathState[Key]{path: newPath, inPath: newInPath})
+		}
+	}
+
+	return result
+}
+
 // pathsBFS collects all simple paths using iterative breadth-first backtracking.
 // Each queue item owns the full path from start to the current frontier vertex,
 // so paths are extended and recorded in breadth (shortest-first) order.

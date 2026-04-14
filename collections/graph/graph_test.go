@@ -473,6 +473,68 @@ func TestGraph_Paths_Cycled(t *testing.T) {
 	}
 }
 
+// ─── Routes ───────────────────────────────────────────────────────────────────
+
+func TestGraph_Routes_DiamondDAG(t *testing.T) {
+	for _, f := range directedGraphFactories {
+		t.Run(f.name, func(t *testing.T) {
+			g := f.new()
+			a, b, c, d := strVertex("a"), strVertex("b"), strVertex("c"), strVertex("d")
+			g.Set(a, b, 0)
+			g.Set(a, c, 0)
+			g.Set(b, d, 0)
+			g.Set(c, d, 0)
+			for _, mode := range []SearchMode{DFSSearch, BFSSearch} {
+				got := g.Routes("a", "d", mode)
+				if len(got) != 2 {
+					t.Fatalf("mode=%d want 2 routes, got %d: %v", mode, len(got), got)
+				}
+				if !containsPath(got, []string{"a", "b", "d"}) {
+					t.Errorf("mode=%d missing route [a b d] in %v", mode, got)
+				}
+				if !containsPath(got, []string{"a", "c", "d"}) {
+					t.Errorf("mode=%d missing route [a c d] in %v", mode, got)
+				}
+			}
+		})
+	}
+}
+
+func TestGraph_Routes_ExcludeVertex(t *testing.T) {
+	for _, f := range directedGraphFactories {
+		t.Run(f.name, func(t *testing.T) {
+			g := f.new()
+			a, b, c, d := strVertex("a"), strVertex("b"), strVertex("c"), strVertex("d")
+			g.Set(a, b, 0)
+			g.Set(a, c, 0)
+			g.Set(b, d, 0)
+			g.Set(c, d, 0)
+			for _, mode := range []SearchMode{DFSSearch, BFSSearch} {
+				got := g.Routes("a", "d", mode, "b")
+				if len(got) != 1 || !containsPath(got, []string{"a", "c", "d"}) {
+					t.Errorf("mode=%d want [[a c d]] after excluding b, got %v", mode, got)
+				}
+			}
+		})
+	}
+}
+
+func TestGraph_Routes_SameVertex(t *testing.T) {
+	for _, f := range directedGraphFactories {
+		t.Run(f.name, func(t *testing.T) {
+			g := f.new()
+			a := strVertex("a")
+			g.Add(a)
+			for _, mode := range []SearchMode{DFSSearch, BFSSearch} {
+				got := g.Routes("a", "a", mode)
+				if len(got) != 1 || !containsPath(got, []string{"a"}) {
+					t.Errorf("mode=%d want [[a]], got %v", mode, got)
+				}
+			}
+		})
+	}
+}
+
 // ─── DFS / BFS traversal ──────────────────────────────────────────────────────
 
 func TestGraph_DFS_VisitsAllVertices(t *testing.T) {

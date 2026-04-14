@@ -28,6 +28,8 @@ type IGraph[Vertex IVertex[Key], Edge any, Key comparable] interface {
 	GetEdge(Vertex, Vertex) (Edge, bool)
 	// Paths returns all simple paths from start; see the package-level Paths function.
 	Paths(Key, bool, SearchMode, ...Key) []Path[Key]
+	// Routes returns all simple paths from start to target; see the package-level Routes function.
+	Routes(start, target Key, mode SearchMode, exclude ...Key) []Path[Key]
 	// DFS runs a depth-first traversal from the given start key.
 	DFS(Key, ITopologyTraversal[Key])
 	// BFS runs a breadth-first traversal from the given start key.
@@ -147,6 +149,10 @@ func (graph *Graph[Vertex, Edge, Key]) GetEdge(from, to Vertex) (edge Edge, ok b
 
 func (graph *Graph[Vertex, Edge, Key]) Paths(start Key, cycled bool, mode SearchMode, exclude ...Key) []Path[Key] {
 	return Paths(graph.topology, start, cycled, mode, exclude...)
+}
+
+func (graph *Graph[Vertex, Edge, Key]) Routes(start, target Key, mode SearchMode, exclude ...Key) []Path[Key] {
+	return Routes(graph.topology, start, target, mode, exclude...)
 }
 
 func (graph *Graph[Vertex, Edge, Key]) DFS(start Key, traversal ITopologyTraversal[Key]) {

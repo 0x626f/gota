@@ -318,6 +318,154 @@ func TestPaths_Cycled_UndirectedTriangle(t *testing.T) {
 	}
 }
 
+// ─── Routes ───────────────────────────────────────────────────────────────────
+
+func TestRoutes_SameVertex_TrivialPath(t *testing.T) {
+	for _, f := range pathsDirectedFactories {
+		t.Run(f.name, func(t *testing.T) {
+			g := f.new()
+			g.Add(0)
+			pathModes(t, "", func(t *testing.T, mode SearchMode) {
+				got := Routes(g, 0, 0, mode)
+				if len(got) != 1 || !containsPath(got, []int{0}) {
+					t.Errorf("want [[0]], got %v", got)
+				}
+			})
+		})
+	}
+}
+
+func TestRoutes_ExcludedStart_Nil(t *testing.T) {
+	for _, f := range pathsDirectedFactories {
+		t.Run(f.name, func(t *testing.T) {
+			g := f.new()
+			g.Set(0, 1)
+			pathModes(t, "", func(t *testing.T, mode SearchMode) {
+				if got := Routes(g, 0, 1, mode, 0); got != nil {
+					t.Errorf("excluded start: want nil, got %v", got)
+				}
+			})
+		})
+	}
+}
+
+func TestRoutes_ExcludedTarget_Nil(t *testing.T) {
+	for _, f := range pathsDirectedFactories {
+		t.Run(f.name, func(t *testing.T) {
+			g := f.new()
+			g.Set(0, 1)
+			pathModes(t, "", func(t *testing.T, mode SearchMode) {
+				if got := Routes(g, 0, 1, mode, 1); got != nil {
+					t.Errorf("excluded target: want nil, got %v", got)
+				}
+			})
+		})
+	}
+}
+
+func TestRoutes_Unreachable_Nil(t *testing.T) {
+	for _, f := range pathsDirectedFactories {
+		t.Run(f.name, func(t *testing.T) {
+			g := f.new()
+			g.Set(0, 1)
+			g.Add(2)
+			pathModes(t, "", func(t *testing.T, mode SearchMode) {
+				if got := Routes(g, 0, 2, mode); got != nil {
+					t.Errorf("unreachable target: want nil, got %v", got)
+				}
+			})
+		})
+	}
+}
+
+func TestRoutes_LinearChain_SinglePath(t *testing.T) {
+	// 0→1→2→3: only one route from 0 to 3.
+	for _, f := range pathsDirectedFactories {
+		t.Run(f.name, func(t *testing.T) {
+			g := f.new()
+			for i := range 3 {
+				g.Set(i, i+1)
+			}
+			pathModes(t, "", func(t *testing.T, mode SearchMode) {
+				got := Routes(g, 0, 3, mode)
+				if len(got) != 1 || !containsPath(got, []int{0, 1, 2, 3}) {
+					t.Errorf("want [[0 1 2 3]], got %v", got)
+				}
+			})
+		})
+	}
+}
+
+func TestRoutes_DiamondDAG_TwoPaths(t *testing.T) {
+	// 0→1→3 and 0→2→3: two routes from 0 to 3.
+	for _, f := range pathsDirectedFactories {
+		t.Run(f.name, func(t *testing.T) {
+			g := f.new()
+			g.Set(0, 1)
+			g.Set(0, 2)
+			g.Set(1, 3)
+			g.Set(2, 3)
+			pathModes(t, "", func(t *testing.T, mode SearchMode) {
+				got := Routes(g, 0, 3, mode)
+				if len(got) != 2 {
+					t.Fatalf("want 2 routes, got %d: %v", len(got), got)
+				}
+				for _, want := range [][]int{{0, 1, 3}, {0, 2, 3}} {
+					if !containsPath(got, want) {
+						t.Errorf("missing route %v in %v", want, got)
+					}
+				}
+			})
+		})
+	}
+}
+
+func TestRoutes_OnlyTargetPaths_NoExtras(t *testing.T) {
+	// 0→1, 0→2, 1→3: routes from 0 to 1 must not include [0,1,3].
+	for _, f := range pathsDirectedFactories {
+		t.Run(f.name, func(t *testing.T) {
+			g := f.new()
+			g.Set(0, 1)
+			g.Set(0, 2)
+			g.Set(1, 3)
+			pathModes(t, "", func(t *testing.T, mode SearchMode) {
+				got := Routes(g, 0, 1, mode)
+				if len(got) != 1 || !containsPath(got, []int{0, 1}) {
+					t.Errorf("want [[0 1]], got %v", got)
+				}
+			})
+		})
+	}
+}
+
+func TestRoutes_BFS_ShortestFirst(t *testing.T) {
+	// 0→1→2→3 with shortcut 0→3: BFS records [0,3] before [0,1,2,3].
+	for _, f := range pathsDirectedFactories {
+		t.Run(f.name, func(t *testing.T) {
+			g := f.new()
+			g.Set(0, 1)
+			g.Set(1, 2)
+			g.Set(2, 3)
+			g.Set(0, 3)
+			got := Routes(g, 0, 3, BFSSearch)
+			if !containsPath(got, []int{0, 3}) || !containsPath(got, []int{0, 1, 2, 3}) {
+				t.Fatalf("expected both routes, got %v", got)
+			}
+			idx := func(want []int) int {
+				for i, p := range got {
+					if slices.Equal(p, want) {
+						return i
+					}
+				}
+				return -1
+			}
+			if idx([]int{0, 3}) > idx([]int{0, 1, 2, 3}) {
+				t.Errorf("BFS must record shorter route [0 3] before longer [0 1 2 3], got %v", got)
+			}
+		})
+	}
+}
+
 // ─── DFS vs BFS ordering ──────────────────────────────────────────────────────
 
 func TestPaths_BFS_ShortestPathsFirst(t *testing.T) {
