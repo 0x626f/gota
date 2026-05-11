@@ -132,6 +132,47 @@ func TestBind_SourceClosed_ClosesListeners(t *testing.T) {
 	}
 }
 
+func TestListen_AfterSourceClosed_ReturnsClosedChannel(t *testing.T) {
+	s := NewStream[int]()
+	src := make(chan int)
+	close(src)
+	s.Bind(src)
+
+	time.Sleep(20 * time.Millisecond)
+
+	ch := s.Listen()
+	select {
+	case _, ok := <-ch:
+		if ok {
+			t.Fatal("listener created after stream close must be closed")
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("listener created after stream close did not close")
+	}
+}
+
+func TestBind_CalledTwice_DoesNotDoubleCloseListeners(t *testing.T) {
+	s := NewStream[int]()
+	ch := s.Listen()
+
+	src1 := make(chan int)
+	src2 := make(chan int)
+	s.Bind(src1)
+	s.Bind(src2)
+
+	close(src1)
+	close(src2)
+
+	select {
+	case _, ok := <-ch:
+		if ok {
+			t.Fatal("listener should close after bound source closes")
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("timeout waiting for listener channel to close")
+	}
+}
+
 // --- Concurrent safety ---
 
 func TestStream_ConcurrentListenAndBroadcast(t *testing.T) {

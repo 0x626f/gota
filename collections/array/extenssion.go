@@ -10,10 +10,17 @@ func (array *Base[I, T]) IsSorted(comparator collections.Comparator[T]) bool {
 		return true
 	}
 
-	order := comparator(array.At(0), array.At(1))
+	order := collections.EQUAL
 
 	for index := 1; index < array.Size(); index++ {
 		direction := comparator(array.At(index-1), array.At(index))
+		if direction == collections.EQUAL {
+			continue
+		}
+		if order == collections.EQUAL {
+			order = direction
+			continue
+		}
 		if direction != order && direction != collections.EQUAL {
 			return false
 		}

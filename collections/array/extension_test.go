@@ -42,6 +42,12 @@ func TestIsSorted_WithTrailingEqual(t *testing.T) {
 	}
 }
 
+func TestIsSorted_WithLeadingEqual(t *testing.T) {
+	if !From(1, 1, 2).IsSorted(intCmp) {
+		t.Errorf("IsSorted: [1,1,2] should be considered sorted")
+	}
+}
+
 // --- InsertionSort ---
 
 func TestInsertionSort_RandomInput(t *testing.T) {

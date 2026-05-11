@@ -97,12 +97,19 @@ func (graph *Graph[Vertex, Edge, Key]) Set(from, to Vertex, edge Edge) bool {
 	if !graph.topology.Set(from.Key(), to.Key()) {
 		return false
 	}
-	graph.vertices[from.Key()] = from
-	graph.vertices[to.Key()] = to
-	if graph.edges[from.Key()] == nil {
-		graph.edges[from.Key()] = make(map[Key]Edge)
+	fromKey, toKey := from.Key(), to.Key()
+	graph.vertices[fromKey] = from
+	graph.vertices[toKey] = to
+	if graph.edges[fromKey] == nil {
+		graph.edges[fromKey] = make(map[Key]Edge)
 	}
-	graph.edges[from.Key()][to.Key()] = edge
+	graph.edges[fromKey][toKey] = edge
+	if fromKey != toKey && graph.topology.Has(toKey, fromKey) {
+		if graph.edges[toKey] == nil {
+			graph.edges[toKey] = make(map[Key]Edge)
+		}
+		graph.edges[toKey][fromKey] = edge
+	}
 	return true
 }
 
@@ -119,12 +126,21 @@ func (graph *Graph[Vertex, Edge, Key]) Remove(path ...Vertex) bool {
 	for i, v := range path {
 		keys[i] = v.Key()
 	}
+	reverseEdges := make([]bool, 0, len(keys)-1)
+	for i := 0; i+1 < len(keys); i++ {
+		reverseEdges = append(reverseEdges, keys[i] != keys[i+1] && graph.topology.Has(keys[i+1], keys[i]))
+	}
 	if !graph.topology.Remove(keys...) {
 		return false
 	}
 	for i := 0; i+1 < len(keys); i++ {
 		if row, ok := graph.edges[keys[i]]; ok {
 			delete(row, keys[i+1])
+		}
+		if reverseEdges[i] {
+			if row, ok := graph.edges[keys[i+1]]; ok {
+				delete(row, keys[i])
+			}
 		}
 	}
 	return true

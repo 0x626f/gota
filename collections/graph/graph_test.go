@@ -195,6 +195,23 @@ func TestGraph_Set_Undirected_BothDirections(t *testing.T) {
 	}
 }
 
+func TestGraph_Set_Undirected_EdgeDataBothDirections(t *testing.T) {
+	for _, f := range graphFactories {
+		t.Run(f.name, func(t *testing.T) {
+			g := f.new()
+			a, b := strVertex("a"), strVertex("b")
+			g.Set(a, b, 7.5)
+			edge, ok := g.GetEdge(b, a)
+			if !ok {
+				t.Fatal("GetEdge must find reverse edge data for undirected edge")
+			}
+			if edge != 7.5 {
+				t.Fatalf("expected reverse edge data 7.5, got %v", edge)
+			}
+		})
+	}
+}
+
 // ─── Remove ───────────────────────────────────────────────────────────────────
 
 func TestGraph_Remove_Edge(t *testing.T) {
@@ -258,6 +275,25 @@ func TestGraph_Remove_ClearsEdgeData(t *testing.T) {
 			g.Remove(a, b)
 			if _, ok := g.GetEdge(a, b); ok {
 				t.Fatal("GetEdge must return false after Remove")
+			}
+		})
+	}
+}
+
+func TestGraph_Remove_UndirectedReverse_ClearsEdgeData(t *testing.T) {
+	for _, f := range graphFactories {
+		t.Run(f.name, func(t *testing.T) {
+			g := f.new()
+			a, b := strVertex("a"), strVertex("b")
+			g.Set(a, b, 42.0)
+			if !g.Remove(b, a) {
+				t.Fatal("Remove must return true for reverse undirected edge")
+			}
+			if _, ok := g.GetEdge(a, b); ok {
+				t.Fatal("forward edge data must be cleared after reverse Remove")
+			}
+			if _, ok := g.GetEdge(b, a); ok {
+				t.Fatal("reverse edge data must be cleared after reverse Remove")
 			}
 		})
 	}

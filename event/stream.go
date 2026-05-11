@@ -10,6 +10,8 @@ type Stream[T any] struct {
 	source    <-chan T
 	listeners []chan<- T
 	size      int
+	bound     bool
+	closed    bool
 
 	mu sync.RWMutex
 }
@@ -44,6 +46,11 @@ func (stream *Stream[T]) Listen() <-chan T {
 	defer stream.mu.Unlock()
 
 	listener := make(chan T, stream.size)
+	if stream.closed {
+		close(listener)
+		return listener
+	}
+
 	stream.listeners = append(stream.listeners, listener)
 
 	return listener
@@ -57,11 +64,12 @@ func (stream *Stream[T]) Bind(source <-chan T) {
 	stream.mu.Lock()
 	defer stream.mu.Unlock()
 
-	if source == nil {
+	if source == nil || stream.bound || stream.closed {
 		return
 	}
 
 	stream.source = source
+	stream.bound = true
 
 	go func() {
 		for {
@@ -79,10 +87,16 @@ func (stream *Stream[T]) Bind(source <-chan T) {
 
 func (stream *Stream[T]) close() {
 	stream.mu.Lock()
+	defer stream.mu.Unlock()
+
+	if stream.closed {
+		return
+	}
+
 	for _, listener := range stream.listeners {
 		close(listener)
 	}
-	stream.mu.Unlock()
+	stream.closed = true
 }
 
 func (stream *Stream[T]) broadcast(event T) {
