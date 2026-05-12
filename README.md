@@ -138,6 +138,18 @@ w = workers.NewWorkerOnEvent(ctx, func(j Job) error {
     return process(j)
 }, jobs)
 w.Run()
+
+// Run a fixed worker pool. By default it starts runtime.NumCPU()-1 workers.
+pool := workers.NewPool(ctx, workers.PoolParams[Job]{
+    Callback: func(j Job) error {
+        return process(j)
+    },
+    QueueSize: 128,
+})
+pool.Run()
+pool.Queue() <- Job{}
+pool.Close()
+pool.Wait()
 ```
 
 Utility functions:
