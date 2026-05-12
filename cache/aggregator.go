@@ -6,9 +6,13 @@ import (
 	"golang.org/x/sync/singleflight"
 )
 
+type RecoveryHandler func(shape string, subject any)
+
 type Aggregator[D any] struct {
 	syncer singleflight.Group
 	cache  Cache[D, string]
+
+	onRecover RecoveryHandler
 }
 
 func NewAggregator[D any](cache ...Cache[D, string]) *Aggregator[D] {
@@ -21,7 +25,18 @@ func NewAggregator[D any](cache ...Cache[D, string]) *Aggregator[D] {
 	return agg
 }
 
+func (aggregator *Aggregator[D]) OnRecovery(handler RecoveryHandler) *Aggregator[D] {
+	aggregator.onRecover = handler
+	return aggregator
+}
+
 func (aggregator *Aggregator[D]) Call(shape string, action func() (D, error), ttl ...time.Duration) (D, error) {
+	defer func() {
+		if r := recover(); r != nil {
+			aggregator.onRecover(shape, r)
+		}
+	}()
+
 	caller := func() (any, error) {
 		if aggregator.cache != nil {
 			if result, exists := aggregator.cache.Get(shape); exists {

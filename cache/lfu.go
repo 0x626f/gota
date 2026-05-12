@@ -101,13 +101,14 @@ func (cache *LFUCache[K, D]) evictLeastFrequent() {
 	}
 }
 
-// Set adds a new item to the cache with an initial frequency of 1.
-// If the key already exists, this method does nothing (existing value is preserved).
+// Set stores an item in the cache.
+// New items start with a frequency of 1. Existing items keep their frequency.
 func (cache *LFUCache[K, D]) Set(key K, item D, _ ...time.Duration) {
 	cache.mu.Lock()
 	defer cache.mu.Unlock()
 
-	if _, exists := cache.spot[key]; exists {
+	if node, exists := cache.spot[key]; exists {
+		node.Data.Second[key] = item
 		return
 	}
 

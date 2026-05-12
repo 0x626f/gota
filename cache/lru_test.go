@@ -79,18 +79,37 @@ func TestLRUCache_Get_NonExistentKey(t *testing.T) {
 	}
 }
 
-func TestLRUCache_Set_DuplicateKey(t *testing.T) {
+func TestLRUCache_Set_UpdatesExistingKey(t *testing.T) {
 	cache := NewLRUCache[string, int](5)
 
 	cache.Set("key1", 100)
-	cache.Set("key1", 200) // Should not update
+	cache.Set("key1", 200)
 
 	val, exists := cache.Get("key1")
 	if !exists {
 		t.Error("Expected key1 to exist")
 	}
-	if val != 100 {
-		t.Errorf("Expected original value 100, got %d (duplicate set should not update)", val)
+	if val != 200 {
+		t.Errorf("Expected updated value 200, got %d", val)
+	}
+}
+
+func TestLRUCache_SetExistingKeyMarksAsRecent(t *testing.T) {
+	cache := NewLRUCache[string, int](2)
+
+	cache.Set("key1", 1)
+	cache.Set("key2", 2)
+	cache.Set("key1", 10)
+	cache.Set("key3", 3)
+
+	if val, exists := cache.Get("key1"); !exists || val != 10 {
+		t.Fatalf("expected key1 to remain with updated value 10, got %d, exists %t", val, exists)
+	}
+	if _, exists := cache.Get("key2"); exists {
+		t.Fatal("expected key2 to be evicted as least recently used")
+	}
+	if val, exists := cache.Get("key3"); !exists || val != 3 {
+		t.Fatalf("expected key3 to exist with value 3, got %d, exists %t", val, exists)
 	}
 }
 

@@ -72,19 +72,18 @@ func TestLFUCache_Get_NonExistentKey(t *testing.T) {
 	}
 }
 
-func TestLFUCache_Set_DuplicateKey(t *testing.T) {
+func TestLFUCache_Set_UpdatesExistingKey(t *testing.T) {
 	cache := NewLFUCache[string, int](10)
 
 	cache.Set("key1", 100)
-	cache.Set("key1", 200) // Should not update
+	cache.Set("key1", 200)
 
 	val, exists := cache.Get("key1")
 	if !exists {
 		t.Error("Expected key1 to exist")
 	}
-	// Should have original value since duplicate set doesn't update
-	if val != 100 {
-		t.Errorf("Expected original value 100, got %d", val)
+	if val != 200 {
+		t.Errorf("Expected updated value 200, got %d", val)
 	}
 }
 
@@ -826,13 +825,13 @@ func TestLFUCache_RepeatedSetGet(t *testing.T) {
 		cache.Get(key)
 	}
 
-	// Should have the first value (subsequent Sets don't update)
+	// Should have the latest value.
 	val, exists := cache.Get("key")
 	if !exists {
 		t.Error("key should exist")
 	}
-	if val != 0 {
-		t.Errorf("Expected first value 0, got %d", val)
+	if val != 49 {
+		t.Errorf("Expected latest value 49, got %d", val)
 	}
 }
 

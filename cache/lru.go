@@ -43,14 +43,16 @@ func NewLRUCache[K comparable, D any](capacity int) *LRUCache[K, D] {
 	}
 }
 
-// Set adds an item to the cache.
-// If the key already exists, this method does nothing (existing value is preserved).
+// Set stores an item in the cache.
+// If the key already exists, its value is updated and marked as most recently used.
 // If the cache is at capacity, the least recently used item is evicted to make room.
 func (cache *LRUCache[K, D]) Set(key K, item D, _ ...time.Duration) {
 	cache.mu.Lock()
 	defer cache.mu.Unlock()
 
-	if _, exists := cache.data[key]; exists {
+	if node, exists := cache.data[key]; exists {
+		node.Data.Second = item
+		cache.recent.MoveToFront(node)
 		return
 	}
 
