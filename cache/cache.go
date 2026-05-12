@@ -1,9 +1,9 @@
-// Package cache provides implementations of various caching strategies
-// including LRU (Least Recently Used) and LFU (Least Frequently Used) caches.
+// Package cache provides in-memory cache implementations and helpers.
 //
-// Caching helps improve performance by storing frequently accessed data
-// in memory for quick retrieval, while automatically evicting less important
-// data when capacity limits are reached.
+// Primary is a map-backed cache with optional per-item TTL. LRUCache evicts
+// the least recently used item when capacity is exceeded. LFUCache evicts
+// least frequently used items when Flush is called. Aggregator combines a cache
+// with duplicate in-flight call suppression for string-keyed loads.
 package cache
 
 import "time"
@@ -13,9 +13,9 @@ import "time"
 // Cache implementations are safe for concurrent use by multiple goroutines.
 type Cache[D any, K comparable] interface {
 	// Set stores a value in the cache with the specified key.
-	// Existing-key behavior depends on the implementation.
-	// Implementations may evict an existing item when capacity is reached.
-	// TTL is optional and only used by Primary.
+	// Existing keys are updated with the new value.
+	// Implementations with a configured capacity may evict items when capacity is exceeded.
+	// TTL is optional; implementations that do not support expiration ignore it.
 	Set(key K, data D, ttl ...time.Duration)
 
 	// Get retrieves a value from the cache by its key.
@@ -30,6 +30,9 @@ type Cache[D any, K comparable] interface {
 	Clear()
 
 	// Flush removes extra items according to the cache eviction policy.
+	// Primary removes expired items, LRUCache removes least recently used items
+	// until it fits capacity, and LFUCache removes least frequently used items
+	// until it fits capacity.
 	Flush()
 }
 

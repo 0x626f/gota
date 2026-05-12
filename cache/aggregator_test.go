@@ -188,6 +188,41 @@ func TestAggregator_CallRunsDifferentKeysConcurrently(t *testing.T) {
 	}
 }
 
+func TestAggregator_CallPanicsWithoutRecoveryHandler(t *testing.T) {
+	aggregator := NewAggregator[int]()
+
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatal("expected panic")
+		}
+	}()
+
+	_, _ = aggregator.Call("shape", func() (int, error) {
+		panic("boom")
+	})
+}
+
+func TestAggregator_CallUsesRecoveryHandler(t *testing.T) {
+	aggregator := NewAggregator[int]().OnRecovery(func(shape string, subject any) {
+		if shape != "shape" {
+			t.Fatalf("expected shape, got %s", shape)
+		}
+		if subject == nil {
+			t.Fatal("expected recovered subject")
+		}
+	})
+
+	result, err := aggregator.Call("shape", func() (int, error) {
+		panic("boom")
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result != 0 {
+		t.Fatalf("expected zero value after recovery, got %d", result)
+	}
+}
+
 func waitForChannel(t *testing.T, ch <-chan struct{}, description string) {
 	t.Helper()
 

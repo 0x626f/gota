@@ -7,7 +7,11 @@ import (
 	"github.com/0x626f/gota/collections/linkedlist"
 )
 
-// LFUCache evicts least frequently used items when capacity is reached.
+// LFUCache is an in-memory least-frequently-used cache.
+//
+// Get increases a key's frequency. Set updates existing keys without changing
+// their frequency. A capacity of 0 means unlimited. TTL arguments passed to Set
+// are ignored.
 type LFUCache[K comparable, D any] struct {
 	mu sync.Mutex
 

@@ -7,7 +7,10 @@ import (
 	"github.com/0x626f/gota/collections/linkedlist"
 )
 
-// LRUCache evicts the least recently used item when capacity is reached.
+// LRUCache is an in-memory least-recently-used cache.
+//
+// Set and Get both mark a key as recently used. A capacity of 0 means
+// unlimited. TTL arguments passed to Set are ignored.
 type LRUCache[K comparable, D any] struct {
 	mu sync.Mutex
 
