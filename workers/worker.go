@@ -29,6 +29,10 @@ type Worker struct {
 
 // NewWorker creates a bare Worker with no runner attached.
 func NewWorker(ctx context.Context, onError ErrorHandler, onRecovery RecoveryHandler) *Worker {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
 	return &Worker{
 		ctx:        ctx,
 		onError:    onError,
@@ -92,7 +96,7 @@ func NewWorkerOnTicker(ctx context.Context, task Task, delay time.Duration) IWor
 			select {
 			case <-ticker.C:
 				go executeTask(worker, task)
-			case <-ctx.Done():
+			case <-worker.ctx.Done():
 				return
 			}
 		}
@@ -116,7 +120,7 @@ func NewWorkerOnSignal(ctx context.Context, task Task, signal <-chan struct{}) I
 				} else {
 					return
 				}
-			case <-ctx.Done():
+			case <-worker.ctx.Done():
 				return
 			}
 		}
@@ -140,7 +144,7 @@ func NewWorkerOnEvent[T any](ctx context.Context, callback Callback[T], signal <
 				} else {
 					return
 				}
-			case <-ctx.Done():
+			case <-worker.ctx.Done():
 				return
 			}
 		}
