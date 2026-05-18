@@ -13,8 +13,8 @@ import (
 // IWorker is the interface implemented by all workers.
 type IWorker interface {
 	Run()
-	OnError(ErrorHandler)
-	OnRecovery(RecoveryHandler)
+	OnError(ErrorHandler) IWorker
+	OnRecovery(RecoveryHandler) IWorker
 }
 
 // Worker is the base implementation of IWorker. Use the New* constructors to
@@ -74,12 +74,14 @@ func (worker *Worker) recovery() {
 	}
 }
 
-func (worker *Worker) OnError(onError ErrorHandler) {
+func (worker *Worker) OnError(onError ErrorHandler) IWorker {
 	worker.onError = onError
+	return worker
 }
 
-func (worker *Worker) OnRecovery(onRecovery RecoveryHandler) {
+func (worker *Worker) OnRecovery(onRecovery RecoveryHandler) IWorker {
 	worker.onRecovery = onRecovery
+	return worker
 }
 
 // NewWorkerOnTicker creates a worker that executes task immediately on Run(),

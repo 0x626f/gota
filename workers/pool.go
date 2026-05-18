@@ -14,8 +14,8 @@ type IPool[T any] interface {
 	Wait()
 	WorkerCount() int
 	QueueSize() int
-	OnError(ErrorHandler)
-	OnRecovery(RecoveryHandler)
+	OnError(ErrorHandler) IPool[T]
+	OnRecovery(RecoveryHandler) IPool[T]
 }
 
 // Pool processes typed queue items from a channel with a fixed number of workers.
@@ -141,10 +141,12 @@ func (pool *Pool[T]) QueueSize() int {
 	return pool.queueSize
 }
 
-func (pool *Pool[T]) OnError(onError ErrorHandler) {
+func (pool *Pool[T]) OnError(onError ErrorHandler) IPool[T] {
 	pool.onError = onError
+	return pool
 }
 
-func (pool *Pool[T]) OnRecovery(onRecovery RecoveryHandler) {
+func (pool *Pool[T]) OnRecovery(onRecovery RecoveryHandler) IPool[T] {
 	pool.onRecovery = onRecovery
+	return pool
 }

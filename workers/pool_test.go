@@ -187,9 +187,12 @@ func TestPool_OnErrorCalled(t *testing.T) {
 		},
 		Workers: 1,
 	})
-	pool.OnError(func(err error) {
+	returned := pool.OnError(func(err error) {
 		errCh <- err
 	})
+	if returned != pool {
+		t.Fatal("OnError did not return the pool instance")
+	}
 	pool.Run()
 
 	pool.Queue() <- 1
@@ -215,9 +218,12 @@ func TestPool_OnRecoveryCalled(t *testing.T) {
 		},
 		Workers: 1,
 	})
-	pool.OnRecovery(func(reason any) {
+	returned := pool.OnRecovery(func(reason any) {
 		recovered <- reason
 	})
+	if returned != pool {
+		t.Fatal("OnRecovery did not return the pool instance")
+	}
 	pool.Run()
 
 	pool.Queue() <- 1

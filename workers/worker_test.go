@@ -110,12 +110,15 @@ func TestNewWorkerOnTicker_OnErrorCalled(t *testing.T) {
 	task := func() error { return expectedErr }
 
 	w := NewWorkerOnTicker(ctx, task, 10*time.Second)
-	w.OnError(func(err error) {
+	returned := w.OnError(func(err error) {
 		select {
 		case errCh <- err:
 		default:
 		}
 	})
+	if returned != w {
+		t.Fatal("OnError did not return the worker instance")
+	}
 	w.Run()
 
 	select {
@@ -139,12 +142,15 @@ func TestNewWorkerOnTicker_OnRecoveryCalled(t *testing.T) {
 	}
 
 	w := NewWorkerOnTicker(ctx, task, 10*time.Second)
-	w.OnRecovery(func(reason any) {
+	returned := w.OnRecovery(func(reason any) {
 		select {
 		case recovered <- reason:
 		default:
 		}
 	})
+	if returned != w {
+		t.Fatal("OnRecovery did not return the worker instance")
+	}
 	w.Run()
 
 	select {
