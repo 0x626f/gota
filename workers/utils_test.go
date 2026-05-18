@@ -13,7 +13,10 @@ func TestDoWithRetries_SuccessOnFirstAttempt(t *testing.T) {
 	ctx := context.Background()
 	var calls int
 
-	err := DoWithRetries(ctx, func() error {
+	err := DoWithRetries(ctx, func(attempt int) error {
+		if attempt != 0 {
+			t.Errorf("expected attempt %d, got %d", 0, attempt)
+		}
 		calls++
 		return nil
 	}, 3)
@@ -29,8 +32,10 @@ func TestDoWithRetries_SuccessOnFirstAttempt(t *testing.T) {
 func TestDoWithRetries_SuccessAfterRetry(t *testing.T) {
 	ctx := context.Background()
 	var calls int
+	var attempts []int
 
-	err := DoWithRetries(ctx, func() error {
+	err := DoWithRetries(ctx, func(attempt int) error {
+		attempts = append(attempts, attempt)
 		calls++
 		if calls < 3 {
 			return errors.New("not yet")
@@ -44,14 +49,19 @@ func TestDoWithRetries_SuccessAfterRetry(t *testing.T) {
 	if calls != 3 {
 		t.Errorf("expected 3 calls, got %d", calls)
 	}
+	if !equalInts(attempts, []int{0, 1, 2}) {
+		t.Errorf("expected attempts [0 1 2], got %v", attempts)
+	}
 }
 
 func TestDoWithRetries_ExhaustRetries(t *testing.T) {
 	ctx := context.Background()
 	var calls int
+	var attempts []int
 	expectedErr := errors.New("persistent error")
 
-	err := DoWithRetries(ctx, func() error {
+	err := DoWithRetries(ctx, func(attempt int) error {
+		attempts = append(attempts, attempt)
 		calls++
 		return expectedErr
 	}, 3)
@@ -63,6 +73,9 @@ func TestDoWithRetries_ExhaustRetries(t *testing.T) {
 	if calls != 4 {
 		t.Errorf("expected 4 calls (1 initial + 3 retries), got %d", calls)
 	}
+	if !equalInts(attempts, []int{0, 1, 2, 3}) {
+		t.Errorf("expected attempts [0 1 2 3], got %v", attempts)
+	}
 }
 
 func TestDoWithRetries_ZeroRetries(t *testing.T) {
@@ -70,7 +83,10 @@ func TestDoWithRetries_ZeroRetries(t *testing.T) {
 	var calls int
 	expectedErr := errors.New("error")
 
-	err := DoWithRetries(ctx, func() error {
+	err := DoWithRetries(ctx, func(attempt int) error {
+		if attempt != 0 {
+			t.Errorf("expected attempt %d, got %d", 0, attempt)
+		}
 		calls++
 		return expectedErr
 	}, 0)
@@ -88,9 +104,11 @@ func TestDoWithRetries_StopsOnContextCancellation(t *testing.T) {
 	defer cancel()
 
 	var calls int
+	var attempts []int
 	expectedErr := errors.New("fail")
 
-	err := DoWithRetries(ctx, func() error {
+	err := DoWithRetries(ctx, func(attempt int) error {
+		attempts = append(attempts, attempt)
 		calls++
 		if calls == 2 {
 			cancel()
@@ -104,12 +122,18 @@ func TestDoWithRetries_StopsOnContextCancellation(t *testing.T) {
 	if calls >= 10 {
 		t.Errorf("expected retries to stop on context cancellation, but ran all 10 retries")
 	}
+	if !equalInts(attempts, []int{0, 1}) {
+		t.Errorf("expected attempts [0 1], got %v", attempts)
+	}
 }
 
 func TestDoWithRetries_PanicRecovery(t *testing.T) {
 	ctx := context.Background()
 
-	err := DoWithRetries(ctx, func() error {
+	err := DoWithRetries(ctx, func(attempt int) error {
+		if attempt != 0 {
+			t.Errorf("expected attempt %d, got %d", 0, attempt)
+		}
 		panic("unexpected panic")
 	}, 0)
 
@@ -124,7 +148,10 @@ func TestDoWithDelays_SuccessOnFirstCall(t *testing.T) {
 	ctx := context.Background()
 	var calls int
 
-	err := DoWithDelays(ctx, func() error {
+	err := DoWithDelays(ctx, func(delay time.Duration) error {
+		if delay != 0 {
+			t.Errorf("expected delay %v, got %v", time.Duration(0), delay)
+		}
 		calls++
 		return nil
 	}, 100*time.Millisecond, 200*time.Millisecond)
@@ -140,14 +167,16 @@ func TestDoWithDelays_SuccessOnFirstCall(t *testing.T) {
 func TestDoWithDelays_RetriesAfterDelay(t *testing.T) {
 	ctx := context.Background()
 	var calls int
+	var delays []time.Duration
 
-	err := DoWithDelays(ctx, func() error {
+	err := DoWithDelays(ctx, func(delay time.Duration) error {
+		delays = append(delays, delay)
 		calls++
 		if calls < 3 {
 			return errors.New("not yet")
 		}
 		return nil
-	}, 20*time.Millisecond, 20*time.Millisecond, 20*time.Millisecond)
+	}, 20*time.Millisecond, 30*time.Millisecond, 40*time.Millisecond)
 
 	if err != nil {
 		t.Errorf("expected no error, got %v", err)
@@ -155,17 +184,22 @@ func TestDoWithDelays_RetriesAfterDelay(t *testing.T) {
 	if calls != 3 {
 		t.Errorf("expected 3 calls, got %d", calls)
 	}
+	if !equalDurations(delays, []time.Duration{0, 20 * time.Millisecond, 30 * time.Millisecond}) {
+		t.Errorf("expected delays [0s 20ms 30ms], got %v", delays)
+	}
 }
 
 func TestDoWithDelays_ExhaustDelays(t *testing.T) {
 	ctx := context.Background()
 	var calls int
+	var delays []time.Duration
 	expectedErr := errors.New("persistent error")
 
-	err := DoWithDelays(ctx, func() error {
+	err := DoWithDelays(ctx, func(delay time.Duration) error {
+		delays = append(delays, delay)
 		calls++
 		return expectedErr
-	}, 10*time.Millisecond, 10*time.Millisecond)
+	}, 10*time.Millisecond, 20*time.Millisecond)
 
 	if err != expectedErr {
 		t.Errorf("expected %v, got %v", expectedErr, err)
@@ -174,6 +208,9 @@ func TestDoWithDelays_ExhaustDelays(t *testing.T) {
 	if calls != 3 {
 		t.Errorf("expected 3 calls (1 initial + 2 retries), got %d", calls)
 	}
+	if !equalDurations(delays, []time.Duration{0, 10 * time.Millisecond, 20 * time.Millisecond}) {
+		t.Errorf("expected delays [0s 10ms 20ms], got %v", delays)
+	}
 }
 
 func TestDoWithDelays_NoDelays(t *testing.T) {
@@ -181,7 +218,10 @@ func TestDoWithDelays_NoDelays(t *testing.T) {
 	var calls int
 	expectedErr := errors.New("error")
 
-	err := DoWithDelays(ctx, func() error {
+	err := DoWithDelays(ctx, func(delay time.Duration) error {
+		if delay != 0 {
+			t.Errorf("expected delay %v, got %v", time.Duration(0), delay)
+		}
 		calls++
 		return expectedErr
 	})
@@ -198,7 +238,10 @@ func TestDoWithDelays_StopsOnContextCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	var calls int
 
-	err := DoWithDelays(ctx, func() error {
+	err := DoWithDelays(ctx, func(delay time.Duration) error {
+		if delay != 0 {
+			t.Errorf("expected delay %v, got %v", time.Duration(0), delay)
+		}
 		calls++
 		cancel() // cancel during first call so the delay wait is skipped
 		return errors.New("fail")
@@ -215,13 +258,44 @@ func TestDoWithDelays_StopsOnContextCancellation(t *testing.T) {
 func TestDoWithDelays_PanicRecovery(t *testing.T) {
 	ctx := context.Background()
 
-	err := DoWithDelays(ctx, func() error {
+	err := DoWithDelays(ctx, func(delay time.Duration) error {
+		if delay != 0 {
+			t.Errorf("expected delay %v, got %v", time.Duration(0), delay)
+		}
 		panic("boom")
 	})
 
 	if err == nil {
 		t.Fatal("expected error from panic recovery, got nil")
 	}
+}
+
+func equalInts(left, right []int) bool {
+	if len(left) != len(right) {
+		return false
+	}
+
+	for i := range left {
+		if left[i] != right[i] {
+			return false
+		}
+	}
+
+	return true
+}
+
+func equalDurations(left, right []time.Duration) bool {
+	if len(left) != len(right) {
+		return false
+	}
+
+	for i := range left {
+		if left[i] != right[i] {
+			return false
+		}
+	}
+
+	return true
 }
 
 // --- DoWithStopwatch ---

@@ -161,12 +161,14 @@ Utility functions:
 
 ```go
 // Retry a fallible operation up to n times, stopping early on ctx cancel.
-err := workers.DoWithRetries(ctx, func() error {
+err := workers.DoWithRetries(ctx, func(attempt int) error {
+    log.Println("connect attempt:", attempt)
     return connectToDB()
 }, 3)
 
 // Retry with explicit back-off delays between each attempt.
-err = workers.DoWithDelays(ctx, func() error {
+err = workers.DoWithDelays(ctx, func(delay time.Duration) error {
+    log.Println("waited before attempt:", delay)
     return connectToDB()
 }, 1*time.Second, 5*time.Second, 30*time.Second)
 
