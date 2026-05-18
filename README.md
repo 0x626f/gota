@@ -92,18 +92,23 @@ router.OnEvent("user.created", func(data any) error {
 router.Route(myEvent)
 ```
 
-**Stream** — broadcasts values from one source channel to many listeners.
+**Stream** — broadcasts values to many listeners from either a bound source channel
+or direct writes.
 
 ```go
 stream := event.NewStream[*Message](event.StreamParams{StreamSize: 32})
+defer stream.Close()
 
 sub1 := stream.Listen()
 sub2 := stream.Listen()
 
+stream.Write(msg)
+
 source := make(chan *Message)
 stream.Bind(source)
+source <- otherMsg
 
-// Both sub1 and sub2 receive every message sent to source.
+// Both sub1 and sub2 receive every message sent to source or written directly.
 ```
 
 ---

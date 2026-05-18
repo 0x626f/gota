@@ -63,6 +63,125 @@ func TestListen_MultipleListeners(t *testing.T) {
 	}
 }
 
+// --- Write ---
+
+func TestWrite_BroadcastsToListeners(t *testing.T) {
+	s := NewStream[int](StreamParams{StreamSize: 4})
+	ch1 := s.Listen()
+	ch2 := s.Listen()
+
+	if s.source != nil {
+		t.Fatal("new stream should not have a source before manual writes")
+	}
+
+	s.Write(1)
+	s.Write(2)
+	s.Write(3)
+
+	if s.source != nil {
+		t.Fatal("Write should not require or create a source")
+	}
+
+	for _, ch := range []<-chan int{ch1, ch2} {
+		got := []int{}
+		for len(ch) > 0 {
+			got = append(got, <-ch)
+		}
+		if len(got) != 3 || got[0] != 1 || got[1] != 2 || got[2] != 3 {
+			t.Errorf("listener received %v, want [1 2 3]", got)
+		}
+	}
+}
+
+func TestWrite_AfterClose_DoesNothing(t *testing.T) {
+	s := NewStream[int](StreamParams{StreamSize: 1})
+	src := make(chan int)
+	s.Bind(src)
+	close(src)
+
+	time.Sleep(20 * time.Millisecond)
+
+	s.Write(1)
+
+	ch := s.Listen()
+	select {
+	case _, ok := <-ch:
+		if ok {
+			t.Fatal("listener created after close must be closed")
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("listener created after close did not close")
+	}
+}
+
+// --- Close ---
+
+func TestClose_ClosesListeners(t *testing.T) {
+	s := NewStream[int]()
+	ch1 := s.Listen()
+	ch2 := s.Listen()
+
+	s.Close()
+
+	for _, ch := range []<-chan int{ch1, ch2} {
+		select {
+		case _, ok := <-ch:
+			if ok {
+				t.Fatal("listener should be closed")
+			}
+		case <-time.After(100 * time.Millisecond):
+			t.Fatal("timeout waiting for listener channel to close")
+		}
+	}
+}
+
+func TestClose_ClearsBoundSource(t *testing.T) {
+	s := NewStream[int]()
+	src := make(chan int)
+	s.Bind(src)
+
+	s.Close()
+
+	if s.bound {
+		t.Fatal("Close should clear bound state")
+	}
+	if s.source != nil {
+		t.Fatal("Close should clear source")
+	}
+}
+
+func TestClose_IsIdempotent(t *testing.T) {
+	s := NewStream[int]()
+	ch := s.Listen()
+
+	s.Close()
+	s.Close()
+
+	select {
+	case _, ok := <-ch:
+		if ok {
+			t.Fatal("listener should be closed")
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("timeout waiting for listener channel to close")
+	}
+}
+
+func TestClose_PreventsNewListeners(t *testing.T) {
+	s := NewStream[int]()
+	s.Close()
+
+	ch := s.Listen()
+	select {
+	case _, ok := <-ch:
+		if ok {
+			t.Fatal("listener created after Close must be closed")
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("listener created after Close did not close")
+	}
+}
+
 // --- Bind ---
 
 func TestBind_NilSource_DoesNothing(t *testing.T) {

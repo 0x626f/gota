@@ -1,19 +1,23 @@
 package event
 
 import (
+	"context"
 	"sync"
 )
 
 // Stream broadcasts values from a single source channel to multiple listeners.
 // It is safe for concurrent use.
 type Stream[T any] struct {
+	ctx    context.Context
+	cancel context.CancelFunc
+
 	source    <-chan T
 	listeners []chan<- T
 	size      int
 	bound     bool
 	closed    bool
 
-	mu sync.RWMutex
+	mu sync.Mutex
 }
 
 // StreamParams configures a Stream.
@@ -70,27 +74,44 @@ func (stream *Stream[T]) Bind(source <-chan T) {
 
 	stream.source = source
 	stream.bound = true
+	stream.ctx, stream.cancel = context.WithCancel(context.Background())
 
 	go func() {
 		for {
 			select {
 			case event, ok := <-source:
 				if !ok {
-					stream.close()
+					stream.Close()
 					return
 				}
 				stream.broadcast(event)
+			case <-stream.ctx.Done():
+				stream.Close()
+				return
 			}
 		}
 	}()
 }
 
-func (stream *Stream[T]) close() {
+// Write broadcasts event directly to all current listeners. Write blocks until
+// every listener receives event or has buffer capacity available. If the stream
+// is closed, Write is a no-op.
+func (stream *Stream[T]) Write(event T) {
+	stream.broadcast(event)
+}
+
+func (stream *Stream[T]) Close() {
 	stream.mu.Lock()
 	defer stream.mu.Unlock()
 
 	if stream.closed {
 		return
+	}
+
+	if stream.bound {
+		stream.cancel()
+		stream.bound = false
+		stream.source = nil
 	}
 
 	for _, listener := range stream.listeners {
@@ -100,9 +121,14 @@ func (stream *Stream[T]) close() {
 }
 
 func (stream *Stream[T]) broadcast(event T) {
-	stream.mu.RLock()
+	stream.mu.Lock()
+	defer stream.mu.Unlock()
+
+	if stream.closed {
+		return
+	}
+
 	for _, listener := range stream.listeners {
 		listener <- event
 	}
-	stream.mu.RUnlock()
 }
