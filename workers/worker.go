@@ -15,6 +15,7 @@ type IWorker interface {
 	Run()
 	OnError(ErrorHandler) IWorker
 	OnRecovery(RecoveryHandler) IWorker
+	OnFinish(FinishHandler) IWorker
 }
 
 // Worker is the base implementation of IWorker. Use the New* constructors to
@@ -24,6 +25,7 @@ type Worker struct {
 	runner     Runner
 	onError    ErrorHandler
 	onRecovery RecoveryHandler
+	onFinish   FinishHandler
 	once       sync.Once
 }
 
@@ -84,6 +86,17 @@ func (worker *Worker) OnRecovery(onRecovery RecoveryHandler) IWorker {
 	return worker
 }
 
+func (worker *Worker) OnFinish(onFinish FinishHandler) IWorker {
+	worker.onFinish = onFinish
+	return worker
+}
+
+func (worker *Worker) finish() {
+	if worker.onFinish != nil {
+		worker.onFinish()
+	}
+}
+
 // NewWorkerOnTicker creates a worker that executes task immediately on Run(),
 // then again on every tick of delay. Stops when ctx is cancelled.
 func NewWorkerOnTicker(ctx context.Context, task Task, delay time.Duration) IWorker {
@@ -99,6 +112,7 @@ func NewWorkerOnTicker(ctx context.Context, task Task, delay time.Duration) IWor
 			case <-ticker.C:
 				go executeTask(worker, task)
 			case <-worker.ctx.Done():
+				worker.finish()
 				return
 			}
 		}
@@ -120,9 +134,11 @@ func NewWorkerOnSignal(ctx context.Context, task Task, signal <-chan struct{}) I
 				if ok {
 					go executeTask(worker, task)
 				} else {
+					worker.finish()
 					return
 				}
 			case <-worker.ctx.Done():
+				worker.finish()
 				return
 			}
 		}
@@ -144,9 +160,11 @@ func NewWorkerOnEvent[T any](ctx context.Context, callback Callback[T], signal <
 				if ok {
 					go executeCallback(worker, callback, payload)
 				} else {
+					worker.finish()
 					return
 				}
 			case <-worker.ctx.Done():
+				worker.finish()
 				return
 			}
 		}

@@ -163,6 +163,33 @@ func TestNewWorkerOnTicker_OnRecoveryCalled(t *testing.T) {
 	}
 }
 
+func TestNewWorkerOnTicker_OnFinishCalledOnContextCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+
+	finished := make(chan struct{}, 1)
+	task := func() error { return nil }
+
+	w := NewWorkerOnTicker(ctx, task, time.Hour)
+	returned := w.OnFinish(func() {
+		select {
+		case finished <- struct{}{}:
+		default:
+		}
+	})
+	if returned != w {
+		t.Fatal("OnFinish did not return the worker instance")
+	}
+	w.Run()
+
+	cancel()
+
+	select {
+	case <-finished:
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("onFinish was not called after context cancellation")
+	}
+}
+
 // --- NewWorkerOnSignal ---
 
 func TestNewWorkerOnSignal_ExecutesOnSignal(t *testing.T) {
@@ -245,6 +272,31 @@ func TestNewWorkerOnSignal_StopsOnContextCancellation(t *testing.T) {
 	}
 }
 
+func TestNewWorkerOnSignal_OnFinishCalledOnContextCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+
+	finished := make(chan struct{}, 1)
+	task := func() error { return nil }
+
+	signal := make(chan struct{})
+	w := NewWorkerOnSignal(ctx, task, signal)
+	w.OnFinish(func() {
+		select {
+		case finished <- struct{}{}:
+		default:
+		}
+	})
+	w.Run()
+
+	cancel()
+
+	select {
+	case <-finished:
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("onFinish was not called after context cancellation")
+	}
+}
+
 func TestNewWorkerOnSignal_ClosedChannelStops(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -270,6 +322,32 @@ func TestNewWorkerOnSignal_ClosedChannelStops(t *testing.T) {
 
 	if atomic.LoadInt32(&count) != snapshot {
 		t.Errorf("task executed after signal channel was closed")
+	}
+}
+
+func TestNewWorkerOnSignal_OnFinishCalledOnClosedChannel(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	finished := make(chan struct{}, 1)
+	task := func() error { return nil }
+
+	signal := make(chan struct{})
+	w := NewWorkerOnSignal(ctx, task, signal)
+	w.OnFinish(func() {
+		select {
+		case finished <- struct{}{}:
+		default:
+		}
+	})
+	w.Run()
+
+	close(signal)
+
+	select {
+	case <-finished:
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("onFinish was not called after signal channel was closed")
 	}
 }
 
@@ -419,6 +497,31 @@ func TestNewWorkerOnEvent_StopsOnContextCancellation(t *testing.T) {
 	}
 }
 
+func TestNewWorkerOnEvent_OnFinishCalledOnContextCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+
+	finished := make(chan struct{}, 1)
+	callback := func(_ int) error { return nil }
+
+	signal := make(chan int)
+	w := NewWorkerOnEvent(ctx, callback, signal)
+	w.OnFinish(func() {
+		select {
+		case finished <- struct{}{}:
+		default:
+		}
+	})
+	w.Run()
+
+	cancel()
+
+	select {
+	case <-finished:
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("onFinish was not called after context cancellation")
+	}
+}
+
 func TestNewWorkerOnEvent_ClosedChannelStops(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -444,6 +547,32 @@ func TestNewWorkerOnEvent_ClosedChannelStops(t *testing.T) {
 
 	if atomic.LoadInt32(&count) != snapshot {
 		t.Errorf("callback executed after event channel was closed")
+	}
+}
+
+func TestNewWorkerOnEvent_OnFinishCalledOnClosedChannel(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	finished := make(chan struct{}, 1)
+	callback := func(_ int) error { return nil }
+
+	signal := make(chan int)
+	w := NewWorkerOnEvent(ctx, callback, signal)
+	w.OnFinish(func() {
+		select {
+		case finished <- struct{}{}:
+		default:
+		}
+	})
+	w.Run()
+
+	close(signal)
+
+	select {
+	case <-finished:
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("onFinish was not called after event channel was closed")
 	}
 }
 
