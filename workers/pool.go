@@ -21,7 +21,7 @@ type IPool[T any] interface {
 // Pool processes typed queue items from a channel with a fixed number of workers.
 type Pool[T any] struct {
 	ctx        context.Context
-	callback   Callback[T]
+	callback   ArgTask[T]
 	queue      chan T
 	workers    int
 	queueSize  int
@@ -34,7 +34,7 @@ type Pool[T any] struct {
 
 // PoolParams contains configuration for a Pool.
 type PoolParams[T any] struct {
-	Callback  Callback[T]
+	Callback  ArgTask[T]
 	Workers   int
 	QueueSize int
 }

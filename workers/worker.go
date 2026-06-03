@@ -49,7 +49,7 @@ func executeTask(worker *Worker, task Task) {
 	}
 }
 
-func executeCallback[T any](worker *Worker, callback Callback[T], payload T) {
+func executeCallback[T any](worker *Worker, callback ArgTask[T], payload T) {
 	defer worker.recovery()
 	if err := callback(payload); err != nil && worker.onError != nil {
 		worker.onError(err)
@@ -110,7 +110,7 @@ func NewWorkerOnTicker(ctx context.Context, task Task, delay time.Duration) IWor
 		for {
 			select {
 			case <-ticker.C:
-				go executeTask(worker, task)
+				executeTask(worker, task)
 			case <-worker.ctx.Done():
 				worker.finish()
 				return
@@ -132,7 +132,7 @@ func NewWorkerOnSignal(ctx context.Context, task Task, signal <-chan struct{}) I
 			select {
 			case _, ok := <-signal:
 				if ok {
-					go executeTask(worker, task)
+					executeTask(worker, task)
 				} else {
 					worker.finish()
 					return
@@ -149,7 +149,7 @@ func NewWorkerOnSignal(ctx context.Context, task Task, signal <-chan struct{}) I
 // NewWorkerOnEvent creates a worker that invokes callback with each value
 // received on signal.
 // Stops when ctx is cancelled or signal is closed.
-func NewWorkerOnEvent[T any](ctx context.Context, callback Callback[T], signal <-chan T) IWorker {
+func NewWorkerOnEvent[T any](ctx context.Context, callback ArgTask[T], signal <-chan T) IWorker {
 	worker := NewWorker(ctx, nil, nil)
 	worker.runner = func() {
 		defer worker.recovery()
@@ -158,7 +158,7 @@ func NewWorkerOnEvent[T any](ctx context.Context, callback Callback[T], signal <
 			select {
 			case payload, ok := <-signal:
 				if ok {
-					go executeCallback(worker, callback, payload)
+					executeCallback(worker, callback, payload)
 				} else {
 					worker.finish()
 					return
