@@ -10,6 +10,8 @@ import (
 type IPool[T any] interface {
 	Run()
 	Queue() chan<- T
+	Consume(<-chan T)
+	Enqueue(T)
 	Close()
 	Wait()
 	WorkerCount() int
@@ -116,6 +118,27 @@ func (pool *Pool[T]) recovery() {
 // Queue returns the channel used to send items to the pool.
 func (pool *Pool[T]) Queue() chan<- T {
 	return pool.queue
+}
+
+// Consume starts a background worker that forwards values from source into the
+// pool queue. The forwarding worker stops when source is closed or the pool
+// context is cancelled.
+//
+// Forwarding uses the same queue as Enqueue and Queue, so it blocks while the
+// pool queue is full.
+func (pool *Pool[T]) Consume(source <-chan T) {
+	NewWorkerOnEvent(pool.ctx, func(payload T) error {
+		pool.queue <- payload
+		return nil
+	}, source).
+		OnError(pool.onError).
+		OnRecovery(pool.onRecovery).
+		Run()
+}
+
+// Enqueue sends payload to the pool queue. It blocks while the queue is full.
+func (pool *Pool[T]) Enqueue(payload T) {
+	pool.queue <- payload
 }
 
 // Close closes the pool queue channel. Workers exit after queued items are

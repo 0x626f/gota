@@ -84,6 +84,92 @@ func TestNewPool_ProcessesQueueFromChannel(t *testing.T) {
 	}
 }
 
+func TestPool_EnqueueProcessesPayload(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	result := make(chan int, 1)
+	pool := NewPool(ctx, PoolParams[int]{
+		Callback: func(value int) error {
+			result <- value
+			return nil
+		},
+		Workers: 1,
+	})
+	pool.Run()
+
+	pool.Enqueue(42)
+
+	select {
+	case value := <-result:
+		if value != 42 {
+			t.Errorf("expected 42, got %d", value)
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("pool did not process enqueued payload")
+	}
+}
+
+func TestPool_ConsumeProcessesSourcePayloads(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	result := make(chan int, 3)
+	pool := NewPool(ctx, PoolParams[int]{
+		Callback: func(value int) error {
+			result <- value
+			return nil
+		},
+		Workers: 2,
+	})
+	pool.Run()
+
+	source := make(chan int, 3)
+	pool.Consume(source)
+
+	source <- 1
+	source <- 2
+	source <- 3
+	close(source)
+
+	seen := map[int]bool{}
+	for len(seen) < 3 {
+		select {
+		case value := <-result:
+			seen[value] = true
+		case <-time.After(100 * time.Millisecond):
+			t.Fatal("pool did not consume submitted source items")
+		}
+	}
+}
+
+func TestPool_ConsumeUsesRecoveryHandler(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	recovered := make(chan any, 1)
+	pool := NewPool(ctx, PoolParams[int]{
+		Callback: func(_ int) error { return nil },
+		Workers:  1,
+	}).OnRecovery(func(reason any) {
+		recovered <- reason
+	})
+
+	source := make(chan int, 1)
+	pool.Consume(source)
+	pool.Close()
+	source <- 1
+
+	select {
+	case reason := <-recovered:
+		if reason == nil {
+			t.Fatal("expected non-nil recovery value")
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("onRecovery was not called after consume send panicked")
+	}
+}
+
 func TestNewPool_ProcessesQueueConcurrently(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
